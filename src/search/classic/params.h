@@ -162,6 +162,7 @@ class BaseSearchParams {
   float GetGarbageCollectionDelay() const {
     return kGarbageCollectionDelay;
   }
+  bool GetHelpmateMode() const { return kHelpmateMode_; }
 
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
@@ -231,6 +232,7 @@ class BaseSearchParams {
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
   static const OptionId kGarbageCollectionDelayId;
+  static const OptionId kHelpmateMode;
 
  protected:
   const OptionsDict& options_;
@@ -290,6 +292,7 @@ class BaseSearchParams {
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
   const float kGarbageCollectionDelay;
+  const bool kHelpmateMode_;
 };
 
 class SearchParams : public BaseSearchParams {

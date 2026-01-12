@@ -752,10 +752,13 @@ std::vector<EdgeAndNode> Search::GetBestChildrenNoTemperature(Node* parent,
                           : edges.end();
   std::partial_sort(
       edges.begin(), middle, edges.end(),
-      [draw_score](const auto& a, const auto& b) {
+      [draw_score, this](const auto& a, const auto& b) {
         // The function returns "true" when a is preferred to b.
+        // In helpmate mode, we invert all preferences to prefer losing moves.
+        const bool helpmate = params_.GetHelpmateMode();
 
-        // Lists edge types from less desirable to more desirable.
+        // Lists edge types from less desirable to more desirable (normal mode).
+        // In helpmate mode, this is inverted: losses become desirable.
         enum EdgeRank {
           kTerminalLoss,
           kTablebaseLoss,
@@ -779,9 +782,12 @@ std::vector<EdgeAndNode> Search::GetBestChildrenNoTemperature(Node* parent,
         };
 
         // If moves have different outcomes, prefer better outcome.
+        // In helpmate mode, invert: prefer worse outcome.
         const auto a_rank = GetEdgeRank(a);
         const auto b_rank = GetEdgeRank(b);
-        if (a_rank != b_rank) return a_rank > b_rank;
+        if (a_rank != b_rank) {
+          return helpmate ? (a_rank < b_rank) : (a_rank > b_rank);
+        }
 
         // If both are terminal draws, try to make it shorter.
         // Not safe to access IsTerminal if GetN is 0.
@@ -791,30 +797,39 @@ std::vector<EdgeAndNode> Search::GetBestChildrenNoTemperature(Node* parent,
             // Prefer non-tablebase draws.
             return a.IsTbTerminal() < b.IsTbTerminal();
           }
-          // Prefer shorter draws.
+          // Prefer shorter draws (same in both modes).
           return a.GetM(0.0f) < b.GetM(0.0f);
         }
 
         // Neither is terminal, use standard rule.
         if (a_rank == kNonTerminal) {
           // Prefer largest playouts then eval then prior.
+          // In helpmate mode, prefer lowest Q (losing positions).
           if (a.GetN() != b.GetN()) return a.GetN() > b.GetN();
           // Default doesn't matter here so long as they are the same as either
           // both are N==0 (thus we're comparing equal defaults) or N!=0 and
           // default isn't used.
           if (a.GetQ(0.0f, draw_score) != b.GetQ(0.0f, draw_score)) {
-            return a.GetQ(0.0f, draw_score) > b.GetQ(0.0f, draw_score);
+            return helpmate 
+                ? (a.GetQ(0.0f, draw_score) < b.GetQ(0.0f, draw_score))
+                : (a.GetQ(0.0f, draw_score) > b.GetQ(0.0f, draw_score));
           }
-          return a.GetP() > b.GetP();
+          // In helpmate mode, prefer lower policy (less likely human moves).
+          return helpmate ? (a.GetP() < b.GetP()) : (a.GetP() > b.GetP());
         }
 
-        // Both variants are winning, prefer shortest win.
+        // Both variants are winning in normal mode, prefer shortest win.
+        // In helpmate mode, we want to AVOID winning, so this branch
+        // shouldn't be reached often, but if it is, prefer longer wins.
         if (a_rank > kNonTerminal) {
-          return a.GetM(0.0f) < b.GetM(0.0f);
+          return helpmate ? (a.GetM(0.0f) > b.GetM(0.0f)) 
+                          : (a.GetM(0.0f) < b.GetM(0.0f));
         }
 
-        // Both variants are losing, prefer longest losses.
-        return a.GetM(0.0f) > b.GetM(0.0f);
+        // Both variants are losing in normal mode, prefer longest losses.
+        // In helpmate mode, prefer SHORTEST losses (get mated faster).
+        return helpmate ? (a.GetM(0.0f) < b.GetM(0.0f)) 
+                        : (a.GetM(0.0f) > b.GetM(0.0f));
       });
 
   if (count < static_cast<int>(edges.size())) {
@@ -1718,6 +1733,13 @@ void SearchWorker::PickNodesToExtendTask(
       const float cpuct = ComputeCpuct(params_, node->GetN(), is_root_node);
       const float puct_mult =
           cpuct * std::sqrt(std::max(node->GetChildrenVisits(), 1u));
+      const bool helpmate_mode = params_.GetHelpmateMode();
+      // In helpmate mode, negate utilities so we explore losing lines
+      if (helpmate_mode) {
+        for (int i = 0; i < max_needed; i++) {
+          current_util[i] = -current_util[i];
+        }
+      }
       int cache_filled_idx = -1;
       while (cur_limit > 0) {
         // Perform UCT for current node.

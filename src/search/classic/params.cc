@@ -529,6 +529,10 @@ const OptionId BaseSearchParams::kGarbageCollectionDelayId{
     "garbage-collection-delay", "GarbageCollectionDelay",
     "The percentage of expected move time until garbage collection start. "
     "Delay lets search find transpositions to freed search tree branches."};
+const OptionId BaseSearchParams::kHelpmateMode{
+    "helpmate-mode", "HelpmateMode",
+    "When enabled, the engine plays to lose as fast as possible. "
+    "Inverts move selection to prefer losing moves and shorter losses."};
 
 const OptionId SearchParams::kMaxPrefetchBatchId{
     "max-prefetch", "MaxPrefetch",
@@ -631,6 +635,7 @@ void BaseSearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
   options->Add<FloatOption>(kGarbageCollectionDelayId, 0.0f, 100.0f) = 10.0f;
+  options->Add<BoolOption>(kHelpmateMode) = false;
 }
 
 void SearchParams::Populate(OptionsParser* options) {
@@ -725,7 +730,8 @@ BaseSearchParams::BaseSearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
-      kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)) {}
+      kGarbageCollectionDelay(options_.Get<float>(kGarbageCollectionDelayId)),
+      kHelpmateMode_(options_.Get<bool>(kHelpmateMode)) {}
 
 SearchParams::SearchParams(const OptionsDict& options)
     : BaseSearchParams(options),
